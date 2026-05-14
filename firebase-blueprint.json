@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "displayName": { "type": "string", "description": "User's full name" },
+        "photoURL": { "type": "string", "format": "uri", "description": "URL to user's profile picture" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User's role in the system" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created" }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Shortlet property listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "pricePerNight": { "type": "number" },
+        "location": { "type": "string" },
+        "address": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "amenities": { "type": "array", "items": { "type": "string" } },
+        "maxGuests": { "type": "number" },
+        "bedrooms": { "type": "number" },
+        "bathrooms": { "type": "number" },
+        "type": { "type": "string", "enum": ["apartment", "house", "villa", "studio"] },
+        "ownerId": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "isAvailable": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "pricePerNight", "location", "address", "type", "ownerId", "isAvailable", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Property booking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "completed"] },
+        "guestCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "userId", "startDate", "endDate", "totalPrice", "status", "guestCount", "createdAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Property review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "userId", "userName", "rating", "comment", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Property listings"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Bookings across all properties"
+    },
+    "/properties/{propertyId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Reviews for a specific property"
+    }
+  }
+}

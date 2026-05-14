@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (required)
+    //   - photoURL: string (optional, uri format)
+    //   - role: string (required, ['admin', 'user'])
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: properties
+    // Document ID: {propertyId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required, size < 100)
+    //   - description: string (required, size < 5000)
+    //   - pricePerNight: number (required, positive)
+    //   - location: string (required)
+    //   - address: string (required)
+    //   - images: list (required, size < 10)
+    //   - amenities: list (required, size < 50)
+    //   - maxGuests: number (required, positive)
+    //   - bedrooms: number (required, positive)
+    //   - bathrooms: number (required, positive)
+    //   - type: string (required, ['apartment', 'house', 'villa', 'studio'])
+    //   - ownerId: string (required)
+    //   - rating: number (required)
+    //   - reviewCount: number (required)
+    //   - isAvailable: bool (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: bookings
+    // Document ID: {bookingId}
+    // Fields:
+    //   - id: string (required)
+    //   - propertyId: string (required)
+    //   - userId: string (required)
+    //   - startDate: timestamp (required)
+    //   - endDate: timestamp (required)
+    //   - totalPrice: number (required, positive)
+    //   - status: string (required, ['pending', 'confirmed', 'cancelled', 'completed'])
+    //   - guestCount: number (required, positive)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "olamilekanoriyomi94@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isRecent(time) {
+      return time > request.time - duration.value(5, 'm') && time < request.time + duration.value(5, 'm');
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.email is string && isValidEmail(data.email) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() < 500)) &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidProperty(data) {
+      return hasOnlyAllowedFields(['id', 'title', 'description', 'pricePerNight', 'location', 'address', 'images', 'amenities', 'maxGuests', 'bedrooms', 'bathrooms', 'type', 'ownerId', 'rating', 'reviewCount', 'isAvailable', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 5000 &&
+             data.pricePerNight is number && data.pricePerNight > 0 &&
+             data.location is string && data.location.size() < 100 &&
+             data.address is string && data.address.size() < 500 &&
+             data.images is list && data.images.size() <= 10 &&
+             data.amenities is list && data.amenities.size() <= 50 &&
+             data.maxGuests is number && data.maxGuests > 0 &&
+             data.bedrooms is number && data.bedrooms >= 0 &&
+             data.bathrooms is number && data.bathrooms >= 0 &&
+             data.type in ['apartment', 'house', 'villa', 'studio'] &&
+             data.ownerId is string &&
+             data.rating is number && data.rating >= 0 && data.rating <= 5 &&
+             data.reviewCount is number && data.reviewCount >= 0 &&
+             data.isAvailable is bool &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return hasOnlyAllowedFields(['id', 'propertyId', 'userId', 'startDate', 'endDate', 'totalPrice', 'status', 'guestCount', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.propertyId is string &&
+             data.startDate is timestamp &&
+             data.endDate is timestamp &&
+             data.endDate > data.startDate &&
+             data.totalPrice is number && data.totalPrice > 0 &&
+             data.status in ['pending', 'confirmed', 'cancelled', 'completed'] &&
+             data.guestCount is number && data.guestCount > 0 &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'user';
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && 
+                    (isAdmin() || request.resource.data.role == resource.data.role);
+    }
+
+    match /properties/{propertyId} {
+      // Initially restricted to authenticated users for browsing
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidProperty(request.resource.data);
+      allow update: if isAdmin() && isValidProperty(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /reviews/{reviewId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidBooking(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
